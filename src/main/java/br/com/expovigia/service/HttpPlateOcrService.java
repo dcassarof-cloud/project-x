@@ -7,10 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -23,10 +23,10 @@ public class HttpPlateOcrService implements PlateOcrService {
 
     public HttpPlateOcrService(
             RestClient.Builder restClientBuilder,
-            @Value("${ocr.client.base-url:http://localhost:8090}") String baseUrl,
-            @Value("${ocr.client.endpoint:/ocr/plate}") String endpointPath,
-            @Value("${ocr.client.connect-timeout-ms:1500}") int connectTimeoutMs,
-            @Value("${ocr.client.read-timeout-ms:3500}") int readTimeoutMs
+            @Value("${app.plate-ocr.base-url:${ocr.client.base-url:http://localhost:8090}}") String baseUrl,
+            @Value("${app.plate-ocr.endpoint:${ocr.client.endpoint:/ocr/plate}}") String endpointPath,
+            @Value("${app.plate-ocr.connect-timeout-ms:${ocr.client.connect-timeout-ms:3000}}") int connectTimeoutMs,
+            @Value("${app.plate-ocr.read-timeout-ms:${ocr.client.read-timeout-ms:10000}}") int readTimeoutMs
     ) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
@@ -76,8 +76,7 @@ public class HttpPlateOcrService implements PlateOcrService {
             );
             return response;
         } catch (RestClientException ex) {
-            log.warn("Falha ao consumir serviço OCR: {}", ex.getMessage());
-            return PlateOcrResponse.empty();
+            throw new OcrServiceUnavailableException("Falha ao consumir serviço OCR", ex);
         }
     }
 

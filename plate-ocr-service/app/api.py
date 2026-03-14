@@ -1,15 +1,19 @@
-import cv2
-import numpy as np
+import logging
+import time
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.config import get_settings
 from app.schemas import PlateOcrResponse
 from app.services.candidate_generator import consolidate_candidates
-from app.services.image_preprocess import preprocess_image
-from app.services.plate_detector import detect_plate_regions
+from app.services.image_preprocess import decode_image_bytes, detect_plate_regions, preprocess_image
 from app.services.plate_normalizer import normalize_plate
-from app.services.plate_ocr import run_ocr
+from app.services.plate_ocr import OcrEngineConfig, PlateOcrEngine
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+settings = get_settings()
+ocr_engine = PlateOcrEngine(OcrEngineConfig(engine=settings.ocr_engine, paddle_language=settings.paddle_language))
 
 
 @router.get("/health")
@@ -19,28 +23,52 @@ def health() -> dict:
 
 @router.post("/ocr/plate", response_model=PlateOcrResponse)
 async def ocr_plate(file: UploadFile = File(...)) -> PlateOcrResponse:
+    started = time.perf_counter()
     payload = await file.read()
+
     if not payload:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    image_array = np.frombuffer(payload, np.uint8)
-    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    image = decode_image_bytes(payload)
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
     regions = detect_plate_regions(image)
     region_detected = len(regions) > 0
-
     all_candidates = []
-    for region in regions[:4]:
-        prepared = preprocess_image(region)
-        all_candidates.extend(run_ocr(prepared))
 
-    fallback_candidates = run_ocr(preprocess_image(image))
-    all_candidates.extend(fallback_candidates)
+    for region in regions[: settings.max_regions]:
+        prepared_region = preprocess_image(
+            region,
+            block_size=settings.adaptive_threshold_block_size,
+            threshold_c=settings.adaptive_threshold_c,
+        )
+        all_candidates.extend(ocr_engine.run(prepared_region))
 
-    candidates = consolidate_candidates(all_candidates)[:5]
+    fallback_preprocessed = preprocess_image(
+        image,
+        block_size=settings.adaptive_threshold_block_size,
+        threshold_c=settings.adaptive_threshold_c,
+    )
+    all_candidates.extend(ocr_engine.run(fallback_preprocessed))
+
+    candidates = consolidate_candidates(
+        all_candidates,
+        min_confidence=settings.min_candidate_confidence,
+        max_candidates=settings.max_candidates,
+    )
+
     best = candidates[0] if candidates else None
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+    logger.info(
+        "OCR concluído file=%s elapsedMs=%s regionDetected=%s candidates=%s confidence=%s",
+        file.filename,
+        elapsed_ms,
+        region_detected,
+        len(candidates),
+        best.confidence if best else 0.0,
+    )
 
     return PlateOcrResponse(
         rawText=best.text if best else None,
@@ -48,5 +76,10 @@ async def ocr_plate(file: UploadFile = File(...)) -> PlateOcrResponse:
         confidence=best.confidence if best else 0.0,
         plateRegionDetected=region_detected,
         candidates=candidates,
-        debug={"candidateCount": len(candidates), "regionsDetected": len(regions)},
+        debug={
+            "engine": settings.ocr_engine,
+            "candidateCount": len(candidates),
+            "regionsDetected": len(regions),
+            "elapsedMs": elapsed_ms,
+        },
     )
