@@ -36,7 +36,7 @@ public class CameraRecognitionService {
                     .found(false)
                     .gate(gate)
                     .direction(direction.name())
-                    .message("Não foi possível detectar uma placa válida")
+                    .message("Não foi possível reconhecer automaticamente a placa. Informe manualmente para validar.")
                     .build();
         }
 

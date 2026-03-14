@@ -1,7 +1,6 @@
 package br.com.expovigia.service;
 
 import br.com.expovigia.dto.OcrResult;
-import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -10,18 +9,8 @@ public class MockPlateOcrService implements PlateOcrService {
 
     @Override
     public OcrResult extractPlateText(MultipartFile file) {
-        String filename = file.getOriginalFilename();
-        if (filename == null || filename.isBlank()) {
-            return new OcrResult("ABC1D23", 0.55D);
-        }
-
-        String normalizedName = filename.toUpperCase(Locale.ROOT);
-        String candidate = normalizedName.replaceAll("[^A-Z0-9]", "");
-
-        if (candidate.length() >= 7) {
-            return new OcrResult(candidate.substring(0, 7), 0.70D);
-        }
-
-        return new OcrResult("ABC1D23", 0.55D);
+        // MVP fallback while OCR provider is not integrated.
+        // Returning null keeps API behavior honest and enables manual validation flow.
+        return new OcrResult(null, 0.0D);
     }
 }

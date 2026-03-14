@@ -33,6 +33,12 @@
 
     <img id="snapshot" alt="Captura" style="max-width: 640px; border:1px solid #ddd; border-radius: 6px; display:none;" />
 
+    <label for="manualPlate">Placa detectada / informada</label>
+    <div class="controls">
+      <input id="manualPlate" type="text" placeholder="Digite ou ajuste a placa" />
+      <button id="validateBtn">Validar placa</button>
+    </div>
+
     <label for="result">Resultado</label>
     <textarea id="result" readonly></textarea>
   </div>
@@ -46,8 +52,39 @@
     const analyzeBtn = document.getElementById('analyzeBtn');
     const gateInput = document.getElementById('gate');
     const directionInput = document.getElementById('direction');
+    const manualPlateInput = document.getElementById('manualPlate');
+    const validateBtn = document.getElementById('validateBtn');
 
     let capturedBlob = null;
+
+    function normalizePlate(value) {
+      return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+    }
+
+    async function validateManualPlate() {
+      const plate = normalizePlate(manualPlateInput.value);
+      if (!plate) {
+        result.value = 'Informe uma placa válida para consulta.';
+        return;
+      }
+
+      manualPlateInput.value = plate;
+
+      try {
+        result.value = 'Validando placa manual...';
+        const response = await fetch('/api/vehicles/plate/' + encodeURIComponent(plate));
+        const payload = await response.json();
+
+        if (!response.ok) {
+          result.value = JSON.stringify({ plate, status: response.status, data: payload }, null, 2);
+          return;
+        }
+
+        result.value = JSON.stringify({ plate, vehicle: payload }, null, 2);
+      } catch (error) {
+        result.value = 'Erro ao validar placa: ' + error.message;
+      }
+    }
 
     async function startCamera() {
       try {
@@ -101,8 +138,16 @@
         const payload = await response.json();
 
         if (!response.ok) {
+          if (payload && payload.detectedPlate) {
+            manualPlateInput.value = normalizePlate(payload.detectedPlate);
+          }
+
           result.value = JSON.stringify(payload, null, 2);
           return;
+        }
+
+        if (payload && payload.detectedPlate) {
+          manualPlateInput.value = normalizePlate(payload.detectedPlate);
         }
 
         result.value = JSON.stringify(payload, null, 2);
@@ -110,6 +155,8 @@
         result.value = 'Erro ao chamar API: ' + error.message;
       }
     });
+
+    validateBtn.addEventListener('click', validateManualPlate);
 
     startCamera();
   </script>
