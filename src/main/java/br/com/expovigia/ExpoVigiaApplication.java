@@ -1,13 +1,12 @@
-package br.com.innovation.projectx;
+package br.com.expovigia;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class ProjectXApplication {
+public class ExpoVigiaApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(ProjectXApplication.class, args);
+        SpringApplication.run(ExpoVigiaApplication.class, args);
     }
-
 }
