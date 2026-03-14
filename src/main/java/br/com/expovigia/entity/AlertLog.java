@@ -30,7 +30,8 @@ import lombok.Setter;
     name = "alert_log",
     indexes = {
         @Index(name = "idx_alert_log_plate", columnList = "plate"),
-        @Index(name = "idx_alert_log_type", columnList = "type")
+        @Index(name = "idx_alert_log_type", columnList = "type"),
+        @Index(name = "idx_alert_log_sent_at", columnList = "sent_at")
     }
 )
 public class AlertLog {
