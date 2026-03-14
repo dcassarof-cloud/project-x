@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teste de Reconhecimento de Placa</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { margin-bottom: 16px; }
+    .container { display: grid; gap: 12px; max-width: 720px; }
+    video, canvas { width: 100%; max-width: 640px; border: 1px solid #ddd; border-radius: 6px; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    input, select, button, textarea { padding: 8px; font-size: 14px; }
+    textarea { width: 100%; min-height: 190px; }
+  </style>
+</head>
+<body>
+  <h1>Teste de Reconhecimento de Placa</h1>
+
+  <div class="container">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div class="controls">
+      <input id="gate" type="text" value="PORTAO_1" placeholder="Portão" />
+      <select id="direction">
+        <option value="ENTRY">ENTRY</option>
+        <option value="EXIT">EXIT</option>
+      </select>
+      <button id="captureBtn">Capturar</button>
+      <button id="analyzeBtn" disabled>Analisar</button>
+    </div>
+
+    <img id="snapshot" alt="Captura" style="max-width: 640px; border:1px solid #ddd; border-radius: 6px; display:none;" />
+
+    <label for="result">Resultado</label>
+    <textarea id="result" readonly></textarea>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const snapshot = document.getElementById('snapshot');
+    const result = document.getElementById('result');
+    const captureBtn = document.getElementById('captureBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const gateInput = document.getElementById('gate');
+    const directionInput = document.getElementById('direction');
+
+    let capturedBlob = null;
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = stream;
+      } catch (error) {
+        result.value = 'Erro ao abrir câmera: ' + error.message;
+      }
+    }
+
+    captureBtn.addEventListener('click', () => {
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 480;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, width, height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          result.value = 'Falha ao capturar frame da câmera.';
+          return;
+        }
+
+        capturedBlob = blob;
+        analyzeBtn.disabled = false;
+        snapshot.src = URL.createObjectURL(blob);
+        snapshot.style.display = 'block';
+        result.value = 'Imagem capturada. Clique em "Analisar".';
+      }, 'image/jpeg', 0.92);
+    });
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!capturedBlob) {
+        result.value = 'Capture uma imagem primeiro.';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', capturedBlob, 'camera-capture.jpg');
+      formData.append('gate', gateInput.value || 'PORTAO_1');
+      formData.append('direction', directionInput.value || 'ENTRY');
+
+      try {
+        result.value = 'Analisando imagem...';
+        const response = await fetch('/api/camera/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          result.value = JSON.stringify(payload, null, 2);
+          return;
+        }
+
+        result.value = JSON.stringify(payload, null, 2);
+      } catch (error) {
+        result.value = 'Erro ao chamar API: ' + error.message;
+      }
+    });
+
+    startCamera();
+  </script>
+</body>
+</html>
