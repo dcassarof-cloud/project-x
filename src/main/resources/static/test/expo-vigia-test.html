@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ExpoVigia - Teste Integrado</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #f4f6fb;
+      color: #1f2937;
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+
+    .layout {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      align-items: start;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.15rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid .full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: #374151;
+    }
+
+    input,
+    select,
+    button {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 0.95rem;
+      background: #ffffff;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      color: #ffffff;
+      background: #2563eb;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background: #475569;
+    }
+
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    video,
+    img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      background: #111827;
+      min-height: 220px;
+      object-fit: contain;
+    }
+
+    pre {
+      margin: 0;
+      min-height: 240px;
+      border-radius: 8px;
+      padding: 12px;
+      color: #d1fae5;
+      background: #0f172a;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <h1>ExpoVigia - Teste Integrado</h1>
+
+  <div class="layout">
+    <section class="card">
+      <h2>Cadastro de veículo</h2>
+      <div class="grid">
+        <label>Placa
+          <input id="plate" type="text" placeholder="ABC1234" />
+        </label>
+        <label>Empresa
+          <input id="companyName" type="text" placeholder="Empresa" />
+        </label>
+        <label>Responsável
+          <input id="responsibleName" type="text" placeholder="Responsável" />
+        </label>
+        <label>Telefone
+          <input id="phone" type="text" placeholder="(00) 00000-0000" />
+        </label>
+        <label>Portão
+          <input id="gate" type="text" value="PORTAO_1" />
+        </label>
+        <label>Status
+          <input id="status" type="text" value="LIBERADO" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="registerBtn">Cadastrar veículo</button>
+        <button id="lookupBtn" class="secondary">Consultar placa</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Câmera</h2>
+      <video id="video" autoplay playsinline></video>
+      <div class="actions">
+        <button id="openCameraBtn">Abrir câmera</button>
+        <button id="captureBtn" class="secondary">Capturar imagem</button>
+        <button id="analyzeBtn" class="secondary" disabled>Analisar imagem</button>
+      </div>
+      <p class="status" id="cameraStatus">Câmera inativa.</p>
+    </section>
+
+    <section class="card">
+      <h2>Preview da captura</h2>
+      <img id="snapshot" alt="Preview da captura" />
+    </section>
+
+    <section class="card">
+      <h2>Resultado da análise</h2>
+      <pre id="result">Aguardando ações...</pre>
+    </section>
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    const resultEl = document.getElementById('result');
+    const cameraStatusEl = document.getElementById('cameraStatus');
+
+    const fields = {
+      plate: document.getElementById('plate'),
+      companyName: document.getElementById('companyName'),
+      responsibleName: document.getElementById('responsibleName'),
+      phone: document.getElementById('phone'),
+      gate: document.getElementById('gate'),
+      status: document.getElementById('status')
+    };
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const snapshot = document.getElementById('snapshot');
+
+    const registerBtn = document.getElementById('registerBtn');
+    const lookupBtn = document.getElementById('lookupBtn');
+    const openCameraBtn = document.getElementById('openCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+
+    let currentCaptureBlob = null;
+
+    function setResult(value) {
+      resultEl.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    function vehiclePayload() {
+      return {
+        plate: fields.plate.value.trim(),
+        companyName: fields.companyName.value.trim(),
+        responsibleName: fields.responsibleName.value.trim(),
+        phone: fields.phone.value.trim(),
+        gate: fields.gate.value.trim(),
+        status: fields.status.value.trim()
+      };
+    }
+
+    async function parseResponse(response) {
+      const text = await response.text();
+      if (!text) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        return text;
+      }
+    }
+
+    async function registerVehicle() {
+      try {
+        const payload = vehiclePayload();
+        const response = await fetch('/api/vehicles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await parseResponse(response);
+        if (!response.ok) {
+          setResult({ action: 'registerVehicle', status: response.status, data });
+          return;
+        }
+
+        setResult({ action: 'registerVehicle', data });
+      } catch (error) {
+        setResult('Erro ao cadastrar veículo: ' + error.message);
+      }
+    }
+
+    async function lookupPlate(plateValue) {
+      const plate = (plateValue || fields.plate.value || '').trim();
+      if (!plate) {
+        setResult('Informe a placa para consulta.');
+        return null;
+      }
+
+      try {
+        const response = await fetch('/api/vehicles/plate/' + encodeURIComponent(plate));
+        const data = await parseResponse(response);
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            setResult({ plate, message: 'Placa não cadastrada' });
+            return null;
+          }
+
+          setResult({ action: 'lookupPlate', plate, status: response.status, data });
+          return null;
+        }
+
+        setResult({ action: 'lookupPlate', plate, vehicle: data });
+        return data;
+      } catch (error) {
+        setResult('Erro ao consultar placa: ' + error.message);
+        return null;
+      }
+    }
+
+    async function openCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = stream;
+        cameraStatusEl.textContent = 'Câmera ativa.';
+      } catch (error) {
+        cameraStatusEl.textContent = 'Falha ao abrir câmera.';
+        setResult('Erro ao abrir câmera: ' + error.message);
+      }
+    }
+
+    function captureImage() {
+      if (!video.srcObject) {
+        setResult('Abra a câmera antes de capturar.');
+        return;
+      }
+
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 480;
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, width, height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          setResult('Não foi possível capturar a imagem.');
+          return;
+        }
+
+        currentCaptureBlob = blob;
+        analyzeBtn.disabled = false;
+        snapshot.src = URL.createObjectURL(blob);
+        setResult('Imagem capturada com sucesso. Clique em "Analisar imagem".');
+      }, 'image/jpeg', 0.92);
+    }
+
+    async function analyzeImage() {
+      if (!currentCaptureBlob) {
+        setResult('Capture uma imagem antes de analisar.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', currentCaptureBlob, 'capture.jpg');
+      formData.append('gate', fields.gate.value.trim() || 'PORTAO_1');
+      formData.append('direction', 'ENTRY');
+
+      try {
+        setResult('Enviando imagem para análise...');
+        const response = await fetch('/api/camera/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await parseResponse(response);
+        if (!response.ok) {
+          setResult({ action: 'analyzeImage', status: response.status, data });
+          return;
+        }
+
+        const detectedPlate = data && data.plate ? String(data.plate).trim() : '';
+        if (detectedPlate) {
+          fields.plate.value = detectedPlate;
+          setResult({ action: 'analyzeImage', analysis: data, plateLookup: 'Consultando veículo por placa detectada...' });
+          const vehicle = await lookupPlate(detectedPlate);
+
+          if (vehicle) {
+            setResult({ action: 'analyzeImage', analysis: data, vehicle });
+          } else {
+            setResult({ action: 'analyzeImage', analysis: data, message: 'Placa não cadastrada' });
+          }
+          return;
+        }
+
+        setResult({ action: 'analyzeImage', analysis: data, message: 'Nenhuma placa detectada.' });
+      } catch (error) {
+        setResult('Erro ao analisar imagem: ' + error.message);
+      }
+    }
+
+    registerBtn.addEventListener('click', registerVehicle);
+    lookupBtn.addEventListener('click', () => lookupPlate());
+    openCameraBtn.addEventListener('click', openCamera);
+    captureBtn.addEventListener('click', captureImage);
+    analyzeBtn.addEventListener('click', analyzeImage);
+  </script>
+</body>
+</html>
