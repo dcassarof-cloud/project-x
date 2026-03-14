@@ -3,108 +3,138 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Teste de Cadastro de Veículos</title>
+  <title>ExpoVigia | Teste OCR de Placas</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; background: #f5f7fb; }
-    .card { max-width: 760px; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-    h1 { margin-top: 0; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .full { grid-column: 1 / -1; }
-    input, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-    button { cursor: pointer; border: none; background: #0d6efd; color: #fff; }
-    button.secondary { background: #5c636a; }
-    video { margin-top: 14px; width: 100%; max-height: 320px; border-radius: 8px; background: #111; }
-    pre { margin-top: 12px; background: #0b1020; color: #d7e3ff; padding: 12px; border-radius: 8px; overflow: auto; }
+    :root { color-scheme: light; }
+    body { font-family: Inter, Arial, sans-serif; margin: 0; padding: 24px; background: #f1f5f9; color: #0f172a; }
+    .layout { max-width: 1000px; margin: 0 auto; display: grid; gap: 16px; }
+    .card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 8px 20px rgba(15,23,42,0.08); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    video, img { width: 100%; border-radius: 10px; background: #0b1220; }
+    button, input, select { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 14px; }
+    button { cursor: pointer; background: #2563eb; color: #fff; border: none; }
+    button.secondary { background: #475569; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    pre { background: #0b1220; color: #e2e8f0; padding: 12px; border-radius: 10px; overflow: auto; min-height: 160px; }
+    .muted { color: #64748b; font-size: 13px; }
   </style>
 </head>
 <body>
-<div class="card">
-  <h1>Cadastro e Consulta de Placas</h1>
-
-  <div class="grid">
-    <input id="plate" placeholder="Placa" />
-    <input id="companyName" placeholder="Empresa" />
-    <input id="responsibleName" placeholder="Responsável" />
-    <input id="phone" placeholder="Telefone" />
-    <input id="gate" placeholder="Portão" />
-    <input id="status" placeholder="Status" value="LIBERADO" />
+<div class="layout">
+  <div class="card">
+    <h2>Leitura de placas com câmera</h2>
+    <p class="muted">Capture uma imagem, envie para análise OCR e use fallback manual quando necessário.</p>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none"></canvas>
+    <img id="snapshot" alt="captura" style="display:none; margin-top:10px" />
   </div>
 
-  <div class="buttons">
-    <button id="registerBtn">Cadastrar Veículo</button>
-    <button id="lookupBtn" class="secondary">Consultar Placa</button>
-    <button id="openCameraBtn" class="secondary">Abrir câmera</button>
-    <button id="activateCameraBtn" class="secondary">Ativar câmera</button>
+  <div class="card">
+    <div class="row">
+      <input id="gate" value="PORTAO_1" placeholder="Portão" />
+      <select id="direction"><option value="ENTRY">ENTRY</option><option value="EXIT">EXIT</option></select>
+      <button id="captureBtn" class="secondary">Capturar frame</button>
+      <button id="analyzeBtn" disabled>Analisar placa</button>
+    </div>
+
+    <h3>Fallback manual</h3>
+    <div class="row">
+      <input id="manualPlate" placeholder="Digite a placa manualmente" style="min-width:260px" />
+      <button id="validateBtn" class="secondary">Validar placa digitada</button>
+    </div>
   </div>
 
-  <video id="camera" autoplay playsinline></video>
-  <pre id="result">Aguardando ações...</pre>
+  <div class="card">
+    <h3>Resultado</h3>
+    <pre id="result">Aguardando ações...</pre>
+  </div>
 </div>
 
 <script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const snapshot = document.getElementById('snapshot');
   const result = document.getElementById('result');
-  const camera = document.getElementById('camera');
+  const gate = document.getElementById('gate');
+  const direction = document.getElementById('direction');
+  const manualPlate = document.getElementById('manualPlate');
+  const captureBtn = document.getElementById('captureBtn');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  let capturedBlob = null;
 
-  const fields = {
-    plate: document.getElementById('plate'),
-    companyName: document.getElementById('companyName'),
-    responsibleName: document.getElementById('responsibleName'),
-    phone: document.getElementById('phone'),
-    gate: document.getElementById('gate'),
-    status: document.getElementById('status')
-  };
+  const normalizePlate = (plate) => (plate || '').toUpperCase().replace(/[\s-]/g, '').replace(/[^A-Z0-9]/g, '');
 
-  function payloadFromForm() {
-    return {
-      plate: fields.plate.value,
-      companyName: fields.companyName.value,
-      responsibleName: fields.responsibleName.value,
-      phone: fields.phone.value,
-      gate: fields.gate.value,
-      status: fields.status.value
-    };
-  }
-
-  async function registerVehicle() {
-    try {
-      const response = await fetch('/api/vehicles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payloadFromForm())
-      });
-
-      const data = await response.json();
-      result.textContent = JSON.stringify(data, null, 2);
-    } catch (error) {
-      result.textContent = 'Erro ao cadastrar veículo: ' + error.message;
-    }
-  }
-
-  async function lookupPlate() {
-    try {
-      const response = await fetch(`/api/vehicles/plate/${encodeURIComponent(fields.plate.value)}`);
-      const data = await response.json();
-      result.textContent = JSON.stringify(data, null, 2);
-    } catch (error) {
-      result.textContent = 'Erro ao consultar placa: ' + error.message;
-    }
-  }
-
-  async function activateCamera() {
+  async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      camera.srcObject = stream;
-      result.textContent = 'Câmera ativada com sucesso.';
+      video.srcObject = stream;
     } catch (error) {
-      result.textContent = 'Erro ao ativar câmera: ' + error.message;
+      result.textContent = 'Erro ao acessar câmera: ' + error.message;
     }
   }
 
-  document.getElementById('registerBtn').addEventListener('click', registerVehicle);
-  document.getElementById('lookupBtn').addEventListener('click', lookupPlate);
-  document.getElementById('openCameraBtn').addEventListener('click', activateCamera);
-  document.getElementById('activateCameraBtn').addEventListener('click', activateCamera);
+  captureBtn.addEventListener('click', () => {
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        result.textContent = 'Falha na captura.';
+        return;
+      }
+
+      capturedBlob = blob;
+      analyzeBtn.disabled = false;
+      snapshot.src = URL.createObjectURL(blob);
+      snapshot.style.display = 'block';
+      result.textContent = 'Imagem capturada. Clique em "Analisar placa".';
+    }, 'image/jpeg', 0.92);
+  });
+
+  analyzeBtn.addEventListener('click', async () => {
+    if (!capturedBlob) return;
+    analyzeBtn.disabled = true;
+    result.textContent = 'Processando OCR...';
+
+    const form = new FormData();
+    form.append('file', capturedBlob, 'camera-capture.jpg');
+    form.append('gate', gate.value || 'PORTAO_1');
+    form.append('direction', direction.value || 'ENTRY');
+
+    try {
+      const response = await fetch('/api/plate-recognition/analyze', { method: 'POST', body: form });
+      const payload = await response.json();
+      const suggestedPlate = normalizePlate(payload?.analysis?.normalizedPlate || payload?.analysis?.detectedPlate);
+      if (suggestedPlate) manualPlate.value = suggestedPlate;
+      result.textContent = JSON.stringify(payload, null, 2);
+    } catch (error) {
+      result.textContent = 'Erro ao analisar: ' + error.message;
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  document.getElementById('validateBtn').addEventListener('click', async () => {
+    const plate = normalizePlate(manualPlate.value);
+    if (!plate) {
+      result.textContent = 'Informe uma placa válida.';
+      return;
+    }
+
+    try {
+      result.textContent = 'Validando placa manual...';
+      const response = await fetch('/api/vehicles/plate/' + encodeURIComponent(plate));
+      const payload = await response.json();
+      result.textContent = JSON.stringify({ action: 'manualValidation', plate, lookup: payload }, null, 2);
+    } catch (error) {
+      result.textContent = 'Erro ao validar placa manual: ' + error.message;
+    }
+  });
+
+  startCamera();
 </script>
 </body>
 </html>

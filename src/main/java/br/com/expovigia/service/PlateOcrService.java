@@ -1,9 +1,9 @@
 package br.com.expovigia.service;
 
-import br.com.expovigia.dto.OcrResult;
-import org.springframework.web.multipart.MultipartFile;
+import br.com.expovigia.dto.PlateOcrRequest;
+import br.com.expovigia.dto.PlateOcrResponse;
 
 public interface PlateOcrService {
 
-    OcrResult extractPlateText(MultipartFile file);
+    PlateOcrResponse extractPlate(PlateOcrRequest request);
 }
