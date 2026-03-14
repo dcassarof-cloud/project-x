@@ -36,6 +36,6 @@ public class VehicleController {
 
     @GetMapping("/plate/{plate}")
     public ResponseEntity<PlateLookupResponse> findByPlate(@PathVariable String plate) {
-        return ResponseEntity.ok(vehicleService.findByPlate(plate));
+        return ResponseEntity.ok(vehicleService.findByPlateResponse(plate));
     }
 }
