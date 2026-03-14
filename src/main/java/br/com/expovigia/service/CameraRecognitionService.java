@@ -32,7 +32,8 @@ public class CameraRecognitionService {
     private final VehicleAccessRepository vehicleAccessRepository;
 
     public CameraAnalyzeResponse analyze(MultipartFile file, String gate, CameraDirection direction) {
-        PlateOcrResponse ocrResponse = callOcr(file);
+        OcrExecution ocrExecution = callOcr(file);
+        PlateOcrResponse ocrResponse = ocrExecution.response();
         String normalizedPlate = PlateUtils.normalize(ocrResponse.normalizedPlate());
 
         Optional<Vehicle> matchedVehicle = plateMatchingService.findBestMatch(normalizedPlate, ocrResponse.candidates());
@@ -46,7 +47,8 @@ public class CameraRecognitionService {
                 gate,
                 direction,
                 matchedVehicle,
-                openAccess
+                openAccess,
+                ocrExecution.ocrUnavailable()
         );
 
         return CameraAnalyzeResponse.builder()
@@ -56,13 +58,16 @@ public class CameraRecognitionService {
                 .build();
     }
 
-    private PlateOcrResponse callOcr(MultipartFile file) {
+    private OcrExecution callOcr(MultipartFile file) {
         try {
             PlateOcrRequest request = new PlateOcrRequest(file.getBytes(), file.getOriginalFilename(), file.getContentType());
-            return plateOcrService.extractPlate(request);
+            return new OcrExecution(plateOcrService.extractPlate(request), false);
+        } catch (OcrServiceUnavailableException ex) {
+            log.warn("Serviço OCR indisponível: {}", ex.getMessage());
+            return new OcrExecution(PlateOcrResponse.empty(), true);
         } catch (IOException ex) {
             log.warn("Falha ao ler imagem para OCR: {}", ex.getMessage());
-            return PlateOcrResponse.empty();
+            return new OcrExecution(PlateOcrResponse.empty(), false);
         }
     }
 
@@ -72,19 +77,27 @@ public class CameraRecognitionService {
             String gate,
             CameraDirection direction,
             Optional<Vehicle> matchedVehicle,
-            Optional<VehicleAccess> openAccess
+            Optional<VehicleAccess> openAccess,
+            boolean ocrUnavailable
     ) {
         double confidence = ocr.confidence();
         boolean hasPlate = normalizedPlate != null && !normalizedPlate.isBlank();
+
+        if (ocrUnavailable) {
+            return baseBuilder(ocr, normalizedPlate, gate, direction)
+                    .found(false)
+                    .requiresConfirmation(false)
+                    .requiresManualInput(true)
+                    .message("Serviço de OCR indisponível no momento. Informe a placa manualmente.")
+                    .build();
+        }
 
         if (!hasPlate) {
             return baseBuilder(ocr, normalizedPlate, gate, direction)
                     .found(false)
                     .requiresConfirmation(false)
                     .requiresManualInput(true)
-                    .message(ocr.rawText() == null
-                            ? "Serviço de OCR indisponível no momento. Informe a placa manualmente."
-                            : "Não foi possível reconhecer automaticamente a placa. Informe manualmente para validar.")
+                    .message("Não foi possível reconhecer automaticamente a placa. Informe manualmente para validar.")
                     .build();
         }
 
@@ -123,6 +136,9 @@ public class CameraRecognitionService {
                 .requiresManualInput(true)
                 .message("Não foi possível reconhecer automaticamente a placa. Informe manualmente para validar.")
                 .build();
+    }
+
+    private record OcrExecution(PlateOcrResponse response, boolean ocrUnavailable) {
     }
 
     private PlateAnalysisResponse.PlateAnalysisResponseBuilder baseBuilder(

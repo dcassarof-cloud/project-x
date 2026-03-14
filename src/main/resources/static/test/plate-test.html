@@ -46,7 +46,8 @@
 
   <div class="card">
     <h3>Resultado</h3>
-    <pre id="result">Aguardando ações...</pre>
+    <div id="summary" class="muted">Aguardando ações...</div>
+    <pre id="result">{}</pre>
   </div>
 </div>
 
@@ -55,6 +56,7 @@
   const canvas = document.getElementById('canvas');
   const snapshot = document.getElementById('snapshot');
   const result = document.getElementById('result');
+  const summary = document.getElementById('summary');
   const gate = document.getElementById('gate');
   const direction = document.getElementById('direction');
   const manualPlate = document.getElementById('manualPlate');
@@ -109,6 +111,9 @@
       const payload = await response.json();
       const suggestedPlate = normalizePlate(payload?.analysis?.normalizedPlate || payload?.analysis?.detectedPlate);
       if (suggestedPlate) manualPlate.value = suggestedPlate;
+      const analysis = payload?.analysis || {};
+      const candidates = (analysis.candidates || []).map((c) => `${c.text} (${(c.confidence * 100).toFixed(1)}%)`).join(', ') || 'nenhum';
+      summary.textContent = `Placa detectada: ${analysis.detectedPlate || '-'} | Normalizada: ${analysis.normalizedPlate || '-'} | Confiança: ${analysis.confidence ?? 0} | Candidatos: ${candidates} | Mensagem: ${analysis.message || payload.message || '-'}`;
       result.textContent = JSON.stringify(payload, null, 2);
     } catch (error) {
       result.textContent = 'Erro ao analisar: ' + error.message;
@@ -128,6 +133,7 @@
       result.textContent = 'Validando placa manual...';
       const response = await fetch('/api/vehicles/plate/' + encodeURIComponent(plate));
       const payload = await response.json();
+      summary.textContent = `Validação manual para placa ${plate}`;
       result.textContent = JSON.stringify({ action: 'manualValidation', plate, lookup: payload }, null, 2);
     } catch (error) {
       result.textContent = 'Erro ao validar placa manual: ' + error.message;
