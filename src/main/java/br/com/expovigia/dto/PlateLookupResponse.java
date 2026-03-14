@@ -1,19 +1,16 @@
 package br.com.expovigia.dto;
 
-import java.time.LocalDateTime;
 import lombok.Builder;
 
 @Builder
 public record PlateLookupResponse(
         boolean found,
         String plate,
-        String company,
-        String responsible,
+        String companyName,
+        String responsibleName,
         String phone,
         String gate,
-        String status,
-        LocalDateTime entryTime,
-        String notes
+        String status
 ) {
 
     public static PlateLookupResponse notFound() {

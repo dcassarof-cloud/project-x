@@ -1,12 +1,15 @@
 package br.com.expovigia.dto;
 
-import lombok.Builder;
+import java.time.LocalDateTime;
 
-@Builder
 public record VehicleResponse(
         Long id,
         String plate,
-        Long exhibitorId,
-        String exhibitorCorporateName
+        String companyName,
+        String responsibleName,
+        String phone,
+        String gate,
+        String status,
+        LocalDateTime createdAt
 ) {
 }
