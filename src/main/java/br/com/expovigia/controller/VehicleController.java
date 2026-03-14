@@ -1,6 +1,7 @@
 package br.com.expovigia.controller;
 
 import br.com.expovigia.dto.CreateVehicleRequest;
+import br.com.expovigia.dto.PlateLookupResponse;
 import br.com.expovigia.dto.VehicleResponse;
 import br.com.expovigia.service.VehicleService;
 import jakarta.validation.Valid;
@@ -34,7 +35,7 @@ public class VehicleController {
     }
 
     @GetMapping("/plate/{plate}")
-    public ResponseEntity<VehicleResponse> findByPlate(@PathVariable String plate) {
+    public ResponseEntity<PlateLookupResponse> findByPlate(@PathVariable String plate) {
         return ResponseEntity.ok(vehicleService.findByPlate(plate));
     }
 }
