@@ -164,6 +164,12 @@
         <button id="captureBtn" class="secondary">Capturar imagem</button>
         <button id="analyzeBtn" class="secondary" disabled>Analisar imagem</button>
       </div>
+      <label>Placa detectada / informada
+        <input id="manualPlate" type="text" placeholder="Digite ou ajuste a placa" />
+      </label>
+      <div class="actions">
+        <button id="validateManualBtn">Validar placa digitada</button>
+      </div>
       <p class="status" id="cameraStatus">Câmera inativa.</p>
     </section>
 
@@ -202,6 +208,8 @@
     const openCameraBtn = document.getElementById('openCameraBtn');
     const captureBtn = document.getElementById('captureBtn');
     const analyzeBtn = document.getElementById('analyzeBtn');
+    const manualPlateInput = document.getElementById('manualPlate');
+    const validateManualBtn = document.getElementById('validateManualBtn');
 
     let currentCaptureBlob = null;
 
@@ -254,8 +262,15 @@
       }
     }
 
+    function normalizePlate(value) {
+      return (value || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+    }
+
     async function lookupPlate(plateValue) {
-      const plate = (plateValue || fields.plate.value || '').trim();
+      const plate = normalizePlate(plateValue || fields.plate.value);
       if (!plate) {
         setResult('Informe a placa para consulta.');
         return null;
@@ -344,24 +359,39 @@
           return;
         }
 
-        const detectedPlate = data && data.plate ? String(data.plate).trim() : '';
+        const detectedPlate = data && data.detectedPlate ? normalizePlate(data.detectedPlate) : '';
         if (detectedPlate) {
+          manualPlateInput.value = detectedPlate;
           fields.plate.value = detectedPlate;
-          setResult({ action: 'analyzeImage', analysis: data, plateLookup: 'Consultando veículo por placa detectada...' });
-          const vehicle = await lookupPlate(detectedPlate);
-
-          if (vehicle) {
-            setResult({ action: 'analyzeImage', analysis: data, vehicle });
-          } else {
-            setResult({ action: 'analyzeImage', analysis: data, message: 'Placa não cadastrada' });
-          }
+          setResult({
+            action: 'analyzeImage',
+            analysis: data,
+            message: 'Placa detectada preenchida no campo manual. Revise e clique em "Validar placa digitada".'
+          });
           return;
         }
 
-        setResult({ action: 'analyzeImage', analysis: data, message: 'Nenhuma placa detectada.' });
+        manualPlateInput.value = '';
+        setResult({
+          action: 'analyzeImage',
+          analysis: data,
+          message: 'Não foi possível reconhecer automaticamente. Informe a placa no campo manual e clique em "Validar placa digitada".'
+        });
       } catch (error) {
         setResult('Erro ao analisar imagem: ' + error.message);
       }
+    }
+
+    async function validateManualPlate() {
+      const normalizedManualPlate = normalizePlate(manualPlateInput.value);
+      if (!normalizedManualPlate) {
+        setResult('Informe uma placa válida para consulta manual.');
+        return;
+      }
+
+      manualPlateInput.value = normalizedManualPlate;
+      fields.plate.value = normalizedManualPlate;
+      await lookupPlate(normalizedManualPlate);
     }
 
     registerBtn.addEventListener('click', registerVehicle);
@@ -369,6 +399,7 @@
     openCameraBtn.addEventListener('click', openCamera);
     captureBtn.addEventListener('click', captureImage);
     analyzeBtn.addEventListener('click', analyzeImage);
+    validateManualBtn.addEventListener('click', validateManualPlate);
   </script>
 </body>
 </html>
