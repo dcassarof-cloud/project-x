@@ -58,7 +58,35 @@
     let capturedBlob = null;
 
     function normalizePlate(value) {
-      return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+      return (value || '')
+        .toUpperCase()
+        .replace(/[\s-]/g, '')
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+    }
+
+    function parsePlateFromAnalysis(payload) {
+      if (!payload || typeof payload !== 'object') {
+        return '';
+      }
+
+      const candidate = payload.normalizedPlate || payload.detectedPlate || '';
+      const normalized = normalizePlate(candidate);
+
+      return normalized === 'CAPTURE' ? '' : normalized;
+    }
+
+    async function parseJsonResponse(response) {
+      const text = await response.text();
+      if (!text) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        return { raw: text };
+      }
     }
 
     async function validateManualPlate() {
@@ -73,7 +101,7 @@
       try {
         result.value = 'Validando placa manual...';
         const response = await fetch('/api/vehicles/plate/' + encodeURIComponent(plate));
-        const payload = await response.json();
+        const payload = await parseJsonResponse(response);
 
         if (!response.ok) {
           result.value = JSON.stringify({ plate, status: response.status, data: payload }, null, 2);
@@ -135,22 +163,28 @@
           body: formData
         });
 
-        const payload = await response.json();
+        const payload = await parseJsonResponse(response);
+        const plateFromAnalysis = parsePlateFromAnalysis(payload);
+
+        if (plateFromAnalysis) {
+          manualPlateInput.value = plateFromAnalysis;
+        }
 
         if (!response.ok) {
-          if (payload && payload.detectedPlate) {
-            manualPlateInput.value = normalizePlate(payload.detectedPlate);
-          }
-
-          result.value = JSON.stringify(payload, null, 2);
+          result.value = JSON.stringify({
+            action: 'cameraAnalyze',
+            status: response.status,
+            analysis: payload,
+            manualPlate: manualPlateInput.value || null
+          }, null, 2);
           return;
         }
 
-        if (payload && payload.detectedPlate) {
-          manualPlateInput.value = normalizePlate(payload.detectedPlate);
-        }
-
-        result.value = JSON.stringify(payload, null, 2);
+        result.value = JSON.stringify({
+          action: 'cameraAnalyze',
+          analysis: payload,
+          manualPlate: manualPlateInput.value || null
+        }, null, 2);
       } catch (error) {
         result.value = 'Erro ao chamar API: ' + error.message;
       }
